@@ -1,0 +1,22 @@
+# Executables
+build/
+*.exe
+*.o
+
+# Assets
+# assets/*.webp
+# assets/*.jpg
+
+# System / IDE
+.vscode/
+.idea/
+*.swp
+*.log
+
+# version cache
+v1/
+v2/
+v3/
+v4/
+# local temp
+assets/
