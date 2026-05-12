@@ -1,6 +1,7 @@
 #ifndef FOREST_H
 #define FOREST_H
 
+#include <stdint.h>
 #include "render.h"
 
 typedef struct Node {

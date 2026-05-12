@@ -1,7 +1,7 @@
 #ifndef SAKURA_H
 #define SAKURA_H
 
-#include "../render.h"
+#include "../include/render.h"
 
 // Massive Sakura Structure
 typedef struct SNode {

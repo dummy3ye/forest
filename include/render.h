@@ -1,7 +1,6 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#include <windows.h>
 #include <stdint.h>
 
 typedef enum {

@@ -1,4 +1,4 @@
-#include "noise.h"
+#include "../include/noise.h"
 #include <math.h>
 
 /* Gradient vectors for 2D Simplex noise */
