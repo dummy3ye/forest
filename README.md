@@ -9,4 +9,5 @@ A high-fidelity, procedural spruce forest simulation rendered using UTF-8 Braill
 - **Seeded Generation**: Deterministic and gnarled tree structures.
 
 ## Documentation
-See `docs/PROJECT.md` for detailed technical specifications.
+See `docs/` for detailed technical specifications.
+and `docs/dev/` for the developers.
