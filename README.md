@@ -1,7 +1,8 @@
 # Forest
 
 A high-fidelity, procedural spruce forest simulation rendered using UTF-8 Braille characters in the terminal.
-
+## Example
+<img src="assets/forest.gif" alt="Forest" />
 ## Features
 - **Needle Texturing**: Sub-pixel detail for realistic foliage.
 - **Somewhat proper Ground Rendering**: Smooth depth effects and stabilized terrain.
