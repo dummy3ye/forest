@@ -1,7 +1,9 @@
 # Forest
 
-A high-fidelity, procedural spruce forest simulation. <br>
-Rendered using UTF-8 Braille characters in the terminal. It's just cozy and cool yk.
+A high-fidelity, procedural Pine forest simulation. It's also somewhat ready to make a giant Cherry Tree but...<br>
+well it's rendered using UTF-8 Braille characters in the terminal. It's just cozy and cool yk. also minimal<br>
+btw, can also be used as screensaver.
+
 ## Example
 > [!IMPORTANT]
 > This project is currently at it's alpha version as of [v0.0.4](https://github.com/dummy3ye/forest/releases/tag/v0.0.4), for windows you just can install the `.exe` file and give it a go. It recent update it will be available in an alternate `iwr` version with a cli `forest` command.
