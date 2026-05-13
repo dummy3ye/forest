@@ -1,6 +1,7 @@
 #include "sakura.h"
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 static SNode *create_snode(float x, float y, int is_foliage)
 {
@@ -29,96 +30,64 @@ static void add_schild(SNode *parent, SNode *child)
 
 static void generate_branch(SNode *parent, float angle, float length, int depth, int max_depth)
 {
-	float lean, current_angle, zig_zag, nx, ny;
+	float current_angle, zig_zag, nx, ny;
 	int splits, i;
 	SNode *child;
 
 	if (depth <= 0)
 		return;
 
-	/* Majestic trees have extreme horizontal reach. */
-	lean = (max_depth - depth) * 0.25f;
 	current_angle = angle;
 
-	if (angle < -1.57f)
-		current_angle -= lean;
-	else
-		current_angle += lean;
-
-	/* Add gnarled "zig-zag" growth */
-	zig_zag = (depth > 4) ? ((rand() % 100 / 100.0f - 0.5f) * 0.6f) : 0;
+	// Ancient Bonsai gnarliness: moderate but clear twisting
+	zig_zag = (depth > 2) ? ((rand() % 100 / 100.0f - 0.5f) * 0.7f) : 0;
 
 	nx = parent->x + cosf(current_angle + zig_zag) * length;
 	ny = parent->y + sinf(current_angle + zig_zag) * length;
 
-	/* Add "droop" to old heavy limbs */
-	if (depth < 5)
-		ny += (max_depth - depth) * 1.5f;
-
-	child = create_snode(nx, ny, (depth <= 3));
+	child = create_snode(nx, ny, (depth <= 4));
 	add_schild(parent, child);
 
 	if (depth <= 1)
 		return;
 
-	/* EXTREME ASYMMETRY: One branch is much longer/stronger than the others */
-	splits = (depth > 6) ? 2 : (rand() % 2 + 1);
+	splits = (rand() % 100 < 80) ? 2 : 1;
 
 	for (i = 0; i < splits; i++) {
 		float spread, new_len;
-
-		if (i == 0) { /* The dominant limb */
-			spread = (rand() % 20 / 100.0f - 0.1f);
-			new_len = length * 0.9f;
-		} else { /* Subordinate, wide-reaching or drooping branch */
-			spread = (rand() % 100 / 100.0f > 0.5 ? 1.2f : -1.2f);
-			new_len = length * 0.5f;
+		if (splits == 1) {
+			spread = (rand() % 60 / 100.0f - 0.3f);
+			new_len = length * 0.88f;
+		} else {
+			spread = (i == 0) ? -(0.5f + (rand() % 60 / 100.0f)) : (0.5f + (rand() % 60 / 100.0f));
+			new_len = length * 0.82f;
 		}
-
 		generate_branch(child, current_angle + spread, new_len, depth - 1, max_depth);
 	}
 }
 
-SakuraTree *create_sakura(float x, float y)
-{
-	SakuraTree *t = (SakuraTree *)malloc(sizeof(SakuraTree));
-	int limbs, i;
-
-	if (!t)
-		return NULL;
-
-	t->root = create_snode(x, y, 0);
-
-	/* Start with 2-3 massive, asymmetric limbs */
-	limbs = 2 + (rand() % 2);
-	for (i = 0; i < limbs; i++) {
-		/* Bias limbs to reach WIDE */
-		float angle = -1.57f + (i == 0 ? -1.0f : (i == 1 ? 1.0f : 0.2f)) + (rand() % 40 / 100.0f - 0.2f);
-		generate_branch(t->root, angle, 40.0f + (rand() % 20), 10, 10);
-	}
-	return t;
-}
-
-static void draw_snode(SNode *n, VirtualBitmap *bmp, int depth)
+static void collect_foliage(SNode *n, SakuraTree *t)
 {
 	int i;
-
 	if (n->is_foliage) {
-		/* Irregular "Cloud" clusters - patchy and majestic */
-		int cloud_count = 3 + rand() % 4;
+		int cloud_count = 2 + rand() % 2;
 		int c;
-
 		for (c = 0; c < cloud_count; c++) {
-			int r = 8 + rand() % 10;
-			float ox = (rand() % 30 - 15);
-			float oy = (rand() % 20 - 10);
+			int r = 8 + rand() % 6; // Airy puffs
+			float ox = (float)(rand() % 30 - 15);
+			float oy = (float)(rand() % 20 - 10);
 			int dx, dy;
-
 			for (dy = -r; dy <= r; dy++) {
 				for (dx = -r; dx <= r; dx++) {
 					if (dx*dx + dy*dy <= r*r) {
-						if (rand() % 100 < 60) {
-							draw_pixel_ext(bmp, (int)(n->x + ox + dx), (int)(n->y + oy + dy), MAT_SAKURA);
+						if (rand() % 100 < 35) {
+							if (t->foliage_count >= t->foliage_capacity) {
+								t->foliage_capacity = (t->foliage_capacity == 0) ? 2048 : t->foliage_capacity * 2;
+								t->foliage_points = (FoliagePoint *)realloc(t->foliage_points, sizeof(FoliagePoint) * t->foliage_capacity);
+							}
+							t->foliage_points[t->foliage_count].x = n->x + ox + (float)dx;
+							t->foliage_points[t->foliage_count].y = n->y + oy + (float)dy;
+							t->foliage_count++;
 						}
 					}
 				}
@@ -127,35 +96,118 @@ static void draw_snode(SNode *n, VirtualBitmap *bmp, int depth)
 		return;
 	}
 
-	/* Majestic Tapering Trunk */
 	for (i = 0; i < n->child_count; i++) {
-		int thickness = (depth < 2) ? 12 : (depth < 4 ? 7 : (depth < 7 ? 3 : 1));
-		int fx, off_x, off_y;
+		collect_foliage(n->children[i], t);
+	}
+}
 
-		/* MASSIVE root flare */
-		if (depth == 0) {
-			for (fx = -35; fx <= 35; fx++) {
-				int h = (35 - abs(fx)) / 3 + 2;
-				int fy;
-				for (fy = 0; fy < h; fy++) {
-					draw_pixel_ext(bmp, (int)n->x + fx, (int)n->y - fy, MAT_TRUNK);
-				}
+SakuraTree *create_sakura(float x, float y)
+{
+	SakuraTree *t = (SakuraTree *)malloc(sizeof(SakuraTree));
+	if (!t) return NULL;
+
+	t->root = create_snode(x, y, 0);
+	t->foliage_points = NULL;
+	t->foliage_count = 0;
+	t->foliage_capacity = 0;
+
+	// Tall, powerful, slightly leaning trunk
+	SNode *current = t->root;
+	float trunk_len = 16.0f; 
+	for (int i = 0; i < 4; i++) {
+		SNode *next = create_snode(current->x + (rand()%8-4), current->y - trunk_len, 0);
+		add_schild(current, next);
+		current = next;
+	}
+
+	// Wide, majestic canopy
+	int limbs = 6 + (rand() % 2);
+	for (int i = 0; i < limbs; i++) {
+		float angle = -1.57f + ((float)i - (limbs-1)/2.0f) * 0.9f;
+		generate_branch(current, angle, 18.0f + (rand() % 8), 10, 10);
+	}
+
+	collect_foliage(t->root, t);
+	return t;
+}
+
+static void free_snode(SNode *n)
+{
+	int i;
+	for (i = 0; i < n->child_count; i++) {
+		free_snode(n->children[i]);
+	}
+	free(n->children);
+	free(n);
+}
+
+void free_sakura(SakuraTree *t)
+{
+	if (!t) return;
+	free_snode(t->root);
+	free(t->foliage_points);
+	free(t);
+}
+
+static void force_pixel(VirtualBitmap *bmp, int x, int y, uint8_t mat) {
+	if (x >= 0 && x < bmp->width && y >= 0 && y < bmp->height) {
+		bmp->data[y * bmp->width + x] = mat;
+	}
+}
+
+static void force_line(VirtualBitmap *bmp, int x0, int y0, int x1, int y1, uint8_t mat) {
+	int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+	int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+	int err = dx + dy, e2;
+	while (1) {
+		force_pixel(bmp, x0, y0, mat);
+		if (x0 == x1 && y0 == y1) break;
+		e2 = 2 * err;
+		if (e2 >= dy) { err += dy; x0 += sx; }
+		if (e2 <= dx) { err += dx; y0 += sy; }
+	}
+}
+
+static void draw_tree_recursive(SNode *n, VirtualBitmap *bmp, int depth)
+{
+	if (n->is_foliage) return;
+	for (int i = 0; i < n->child_count; i++) {
+		// Massive trunk tapering to thin branches
+		int thickness = (depth < 2) ? (30 - depth * 8) : (depth < 4 ? 10 : (depth < 7 ? 4 : 1));
+		if (thickness < 1) thickness = 1;
+
+		for (int ox = -thickness; ox <= thickness; ox++) {
+			int y_off = (thickness > 10) ? (thickness / 4) : 0;
+			for (int oy = -y_off; oy <= y_off; oy++) {
+				force_line(bmp, (int)n->x + ox, (int)n->y + oy, 
+						   (int)n->children[i]->x + ox, (int)n->children[i]->y + oy, MAT_TRUNK);
 			}
 		}
-
-		/* Draw gnarled limb */
-		for (off_x = -thickness; off_x <= thickness; off_x++) {
-			int y_off_max = (thickness > 3) ? (thickness / 3) : 0;
-			for (off_y = -y_off_max; off_y <= y_off_max; off_y++) {
-				draw_line_ext(bmp, (int)n->x + off_x, (int)n->y + off_y,
-							  (int)n->children[i]->x + off_x, (int)n->children[i]->y + off_y, MAT_TRUNK);
-			}
-		}
-		draw_snode(n->children[i], bmp, depth + 1);
+		draw_tree_recursive(n->children[i], bmp, depth + 1);
 	}
 }
 
 void draw_sakura(SakuraTree *t, VirtualBitmap *bmp)
 {
-	draw_snode(t->root, bmp, 0);
+	// 1. Draw Ground Base (Anchors the tree)
+	for (int gy = 0; gy < 10; gy++) {
+		int w = 50 - gy * 3;
+		for (int gx = -w; gx <= w; gx++) {
+			force_pixel(bmp, (int)t->root->x + gx, (int)t->root->y + gy, MAT_GROUND);
+		}
+	}
+
+	// 2. Draw Anchor Roots (Prevents "floating")
+	for (int r = 0; r < 6; r++) {
+		float rx = t->root->x + (rand() % 100 - 50);
+		force_line(bmp, (int)t->root->x, (int)t->root->y, (int)rx, bmp->height - 1, MAT_TRUNK);
+	}
+
+	// 3. Draw Foliage clouds FIRST
+	for (int i = 0; i < t->foliage_count; i++) {
+		draw_pixel_ext(bmp, (int)t->foliage_points[i].x, (int)t->foliage_points[i].y, MAT_SAKURA);
+	}
+
+	// 4. Draw Trunk and Branches ON TOP (The Skeleton)
+	draw_tree_recursive(t->root, bmp, 0);
 }

@@ -68,6 +68,21 @@ static void get_braille(uint8_t pixels[8], char *out) {
 	out[3] = '\0';
 }
 
+static char* append_int(char *p, int n) {
+	if (n >= 100) { *p++ = '0' + (n / 100); n %= 100; *p++ = '0' + (n / 10); n %= 10; *p++ = '0' + n; }
+	else if (n >= 10) { *p++ = '0' + (n / 10); n %= 10; *p++ = '0' + n; }
+	else { *p++ = '0' + n; }
+	return p;
+}
+
+static char* append_color_fast(char *p, int r, int g, int b) {
+	memcpy(p, "\x1b[38;2;", 7); p += 7;
+	p = append_int(p, r); *p++ = ';';
+	p = append_int(p, g); *p++ = ';';
+	p = append_int(p, b); *p++ = 'm';
+	return p;
+}
+
 /* Renders multi-layer bitmaps to terminal using Braille mapping and depth-fogging */
 void render_to_console(VirtualBitmap **bmps, int layer_count) {
 	static char *buffer = NULL;
@@ -76,37 +91,41 @@ void render_to_console(VirtualBitmap **bmps, int layer_count) {
 	int term_w = bmps[0]->width / 2;
 	int term_h = bmps[0]->height / 4;
 
-	int new_size = term_w * term_h * 60 + 1024;
+	int new_size = term_w * term_h * 32 + 1024; // Braille + Color + Misc
 	if (new_size > buf_size) {
 		buffer = (char*)realloc(buffer, new_size);
 		buf_size = new_size;
 	}
 
 	char *p = buffer;
-	p += sprintf(p, "\x1b[H");
+	memcpy(p, "\x1b[H", 3); p += 3;
 
 	int last_r = -1, last_g = -1, last_b = -1;
 
 	for (int y = 0; y < term_h; y++) {
+		int py0 = y * 4;
 		for (int x = 0; x < term_w; x++) {
+			int px0 = x * 2;
 			int top_layer = -1;
 			uint8_t best_pixels[8] = {0};
 			uint8_t dominant_mat = 0;
 
 			for (int l = 0; l < layer_count; l++) {
+				uint8_t *data = bmps[l]->data;
+				int stride = bmps[l]->width;
 				uint8_t current_pixels[8];
 				int has_data = 0;
 				uint8_t local_mat = 0;
+
 				for (int dy = 0; dy < 4; dy++) {
-					for (int dx = 0; dx < 2; dx++) {
-						int px = x * 2 + dx;
-						int py = y * 4 + dy;
-						uint8_t val = bmps[l]->data[py * bmps[l]->width + px];
-						current_pixels[dy * 2 + dx] = (val > 0);
-						if (val > local_mat) local_mat = val;
-						if (val) has_data = 1;
-					}
+					uint8_t *row = &data[(py0 + dy) * stride + px0];
+					current_pixels[dy * 2] = (row[0] > 0);
+					current_pixels[dy * 2 + 1] = (row[1] > 0);
+					if (row[0] > local_mat) local_mat = row[0];
+					if (row[1] > local_mat) local_mat = row[1];
+					if (row[0] || row[1]) has_data = 1;
 				}
+
 				if (has_data) {
 					top_layer = l;
 					dominant_mat = local_mat;
@@ -118,31 +137,30 @@ void render_to_console(VirtualBitmap **bmps, int layer_count) {
 			if (top_layer != -1) {
 				float depth = (float)top_layer / layer_count;
 				int mr = 0, mg = 0, mb = 0;
-				if (dominant_mat == MAT_TRUNK) { mr = 100; mg = 70; mb = 40; }
-				else if (dominant_mat == MAT_FOLIAGE) { mr = 40; mg = 100; mb = 40; }
-				else if (dominant_mat == MAT_GROUND) { mr = 30; mg = 80; mb = 30; }
-				else if (dominant_mat == MAT_ROCK) { mr = 80; mg = 80; mb = 80; }
-				else if (dominant_mat == MAT_PARTICLE) { mr = 220; mg = 180; mb = 180; }
-				else if (dominant_mat == MAT_SAKURA) { mr = 255; mg = 150; mb = 200; }
+				switch (dominant_mat) {
+					case MAT_TRUNK: mr = 100; mg = 70; mb = 40; break;
+					case MAT_FOLIAGE: mr = 40; mg = 100; mb = 40; break;
+					case MAT_GROUND: mr = 30; mg = 80; mb = 30; break;
+					case MAT_ROCK: mr = 80; mg = 80; mb = 80; break;
+					case MAT_PARTICLE: mr = 220; mg = 180; mb = 180; break;
+					case MAT_SAKURA: mr = 255; mg = 150; mb = 200; break;
+				}
 
-				/* Fog blending based on layer depth */
-				int fog_r = 15, fog_g = 20, fog_b = 25;
-				int r = (int)((1.0f - depth) * mr + depth * fog_r);
-				int g = (int)((1.0f - depth) * mg + depth * fog_g);
-				int b = (int)((1.0f - depth) * mb + depth * fog_b);
+				int r = (int)((1.0f - depth) * mr + depth * 15); // Fog R=15
+				int g = (int)((1.0f - depth) * mg + depth * 20); // Fog G=20
+				int b = (int)((1.0f - depth) * mb + depth * 25); // Fog B=25
 
 				if (r != last_r || g != last_g || b != last_b) {
-					p += sprintf(p, "\x1b[38;2;%d;%d;%dm", r, g, b);
+					p = append_color_fast(p, r, g, b);
 					last_r = r; last_g = g; last_b = b;
 				}
-				char braille[4];
-				get_braille(best_pixels, braille);
-				p += sprintf(p, "%s", braille);
+				get_braille(best_pixels, p);
+				p += 3;
 			} else {
 				*p++ = ' ';
 			}
 		}
-		*p++ = '\n';
+		if (y < term_h - 1) *p++ = '\n';
 	}
 	fwrite(buffer, 1, p - buffer, stdout);
 	fflush(stdout);
