@@ -4,18 +4,19 @@
 #include <stdint.h>
 
 typedef enum {
-    MAT_EMPTY = 0,
-    MAT_TRUNK = 1,
-    MAT_FOLIAGE = 2,
-    MAT_GROUND = 3,
-    MAT_ROCK = 4,
-    MAT_PARTICLE = 5
+	MAT_EMPTY = 0,
+	MAT_TRUNK = 1,
+	MAT_FOLIAGE = 2,
+	MAT_GROUND = 3,
+	MAT_ROCK = 4,
+	MAT_PARTICLE = 5,
+	MAT_SAKURA = 6
 } Material;
 
 typedef struct {
-    int width;
-    int height;
-    uint8_t *data; // Stores Material ID
+	int width;
+	int height;
+	uint8_t *data; // Stores Material ID
 } VirtualBitmap;
 
 VirtualBitmap* create_bitmap(int w, int h);

@@ -1,31 +1,34 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -Iinclude
+CFLAGS = -Wall -Wextra -Iinclude -Isakura
 LDFLAGS = -lm
 
-# Source files
-SRCS = src/main.c src/forest.c src/noise.c src/render.c
-# Sakura is currently not used in main.c, but we can include it if needed.
-# For now, let's keep it to what main.c uses.
-
-# Output binary name
-TARGET = forest
-
-# Detect OS
-ifeq ($(OS),Windows_NT)
-    BIN = $(TARGET).exe
-    # Windows might need extra flags, but usually standard gcc works for this project.
-else
-    BIN = $(TARGET)
-endif
+# Source files for forest
+FOREST_SRCS = src/main.c src/forest.c src/noise.c src/render.c
+# Source files for sakura demo
+SAKURA_SRCS = src/sakura_demo.c sakura/sakura.c src/render.c
 
 # Output directory
 DIST_DIR = dist
 
-all: $(DIST_DIR)/$(BIN)
+# Detect OS
+ifeq ($(OS),Windows_NT)
+    EXT = .exe
+else
+    EXT =
+endif
 
-$(DIST_DIR)/$(BIN): $(SRCS)
+FOREST_BIN = $(DIST_DIR)/forest$(EXT)
+SAKURA_BIN = $(DIST_DIR)/sakura$(EXT)
+
+all: $(FOREST_BIN) $(SAKURA_BIN)
+
+$(FOREST_BIN): $(FOREST_SRCS)
 	@mkdir -p $(DIST_DIR)
-	$(CC) $(CFLAGS) $(SRCS) -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(FOREST_SRCS) -o $@ $(LDFLAGS)
+
+$(SAKURA_BIN): $(SAKURA_SRCS)
+	@mkdir -p $(DIST_DIR)
+	$(CC) $(CFLAGS) $(SAKURA_SRCS) -o $@ $(LDFLAGS)
 
 clean:
 	rm -rf $(DIST_DIR)
